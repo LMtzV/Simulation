@@ -1,0 +1,430 @@
+---
+title: "Simulación: Tarea 4"
+author: 
+- "Luis Gerardo Martínez Valdés"
+- "Emiliano Pizaña Vega"
+- "Fausto Membrillo Fuentes"
+
+date: "Otoño 2021"
+output: pdf_document
+number_sections: TRUE
+---
+\vspace{3cm.}
+
+\begin{center}
+\includegraphics{itamlogo.png}
+\end{center}
+
+\newpage
+
+````{r,echo= FALSE,results=FALSE, message =FALSE, warning= FALSE}
+library(FactoMineR)
+library(factoextra)
+library(ggplot2)
+library(readr)
+library(dbplyr)
+library(ggthemes)
+library(stringr)
+````
+
+# Pregunta 1 
+
+## (a)
+
+\begin{center}
+\includegraphics{Ej1T4SIMa.png}
+\end{center}
+\begin{center}
+\includegraphics{Ej1T4SIMb.png}
+\end{center}
+
+
+```{r}
+
+#Ejercicio simular cadena de markov donde Xn=(X1n,X2n).
+#Xin = num componentes en el armario i al tiempo n (o despues de n horas)
+
+#Espacio de estados S = {(0,0), (0,1), (0,2), (1,0), (2,0) }.
+#La matriz de probabilidades de transicion entre esos 5 estados es
+#P = [.5 .35 .15 0 0; .15 .5 0 0 .35; .35 0 .5 .15 0; 0 0 .5 .5 0; 0 .3 0 0 .7]
+
+set.seed = 1234  #para poder replicar los resultados, ya que dependen de 
+#numeros aleatorios
+probs = c(.5,.35,.15,0,0,.15,.5,0,0,.35,.35,0,.5,.15,0,0,0,.5,.5,0,0,.3,0,0,.7)
+P <- matrix(data=probs,nrow=5,ncol=5,byrow=TRUE)
+
+#------------------------------------
+#funcion auxiliar para ver el estado estacionario de la cadena de markov
+matrizPotencia <-function(P,pot){
+  resultado=P
+  for (j in 2:pot){
+    resultado=resultado%*%P
+  }
+  matrizPotencia = resultado
+}
+###################################
+numPasos = 500
+pasoActual = 0
+estadoActual=c(0,0)
+numEdoAct = 1
+print(numEdoAct)
+listaEstadosVisito = rep(0,numPasos+1)
+listaEstadosVisito[1] = 1
+for (pasoActual in 1:numPasos){
+  #numEdoAct = numEstadoActual(estadoActual[1],estadoActual[2])    
+  #ver si estoy en el estado 1,2,3,4 o 5
+  #print(numEdoAct)
+  numEdoAct = sample(1:5, 1, prob = P[numEdoAct,1:5])
+  #print(numEdoAct)
+  listaEstadosVisito[pasoActual] = numEdoAct
+}
+print(listaEstadosVisito)
+proporcionApagadaMaq1 = sum(listaEstadosVisito==4)/numPasos  
+#proporcion de tiempo que esta en estado 4 ( X=(2,0) )
+
+proporcionApagadaMaq2 = sum(listaEstadosVisito==5)/numPasos  
+#proporcion de tiempo que esta en estado 5 ( X=(0,2) )
+
+print(proporcionApagadaMaq1)
+print(proporcionApagadaMaq2)
+#salieron 0.002 y 0.484
+#ESAS SON PARA ESTA MUESTRA, LAS PROPORCIONES EXACTAS SE OBTIENEN CON EL VECTOR
+#DE ESTADO ESTACIONARIO (sale de resolver (pi1,pi2,...,pi5)=(pi1,pi2,...,pi5)*P junto con pi1+...+pi5=1)
+#IGUAL SE PUEDE OBTENER ELEVANDO LA MATRIZ P A UNA POTENCIA GRANDE Y VIENDO SUS COLUMNAS:
+PotenciadeP = matrizPotencia(P,100)   #estoy calculando P^100
+print(PotenciadeP)
+#ahi se ve (columnas 4 y 5) que las probabilidades (proporciones)
+#son cercanas a 0.0194 y 0.4116  (1.94% y 41.16%)
+
+```
+
+# Pregunta 2
+
+##(a)
+```{r, results=TRUE, message=FALSE, warning=FALSE }
+lambdat <- function(t, T0){
+  for(i in 0:T0){
+    if(t <= ((2*i) + 1) & t > 2*i) {
+      z <- 3
+      return(z)
+    }
+    else 
+      z <- 5
+  }
+  return(z)
+}
+
+p.nohomogeneo <- function(lambdat,n){
+
+  lambda <- 5 #constante que mayoriza
+  TT <- rexp(n,lambda) 
+  s <- cumsum(TT) 
+  u <- runif(n) 
+  
+  ss <- s[u <= lambdat(s,n)/lambda]
+  Ns <- 1:length(ss)
+  plot(ss, Ns, type = "s") 
+  return(list(epocas = ss, cuenta= Ns))
+}
+x <- p.nohomogeneo(lambdat,100)
+```
+
+
+## (b)
+```{r,warning=FALSE, results=TRUE}
+lambdat <- function(t, T0){
+  for(i in 0:T0){
+    if(t <= ((2*i) + 1) & t > 2*i) {
+      z <- 3
+      return(z)
+    }
+    else 
+      z <- 5
+  }
+  return(z)
+}
+
+p.nohomogeneo <- function(lambdat){
+  
+  lambda <- 5 #constante que mayoriza
+  i <- 1
+  ss <- NULL
+  while(length(ss) != 100)
+  {
+    TT <- rexp(i,lambda) 
+    s <- cumsum(TT) 
+    u <- runif(i) 
+  
+    ss <- s[u <= lambdat(s,i)/lambda]
+    i <- i + 1
+  }
+  Ns <- 1:length(ss)
+  plot(ss, Ns, type = "s") 
+  return(list(epocas = ss, cuenta= Ns))
+}
+
+x <- p.nohomogeneo(lambdat)
+```
+
+
+## (c)
+
+```{r}
+ppois(2,6.75,lower.tail = FALSE) #lambda nos queda como 6.75
+```
+
+# Pregunta 3
+Queremos simular un Proceso Poisson no-homogéneo con función de intensidad $\lambda= \lvert sen(t) \rvert$
+
+```{r, results= TRUE, message = FALSE, warning= FALSE}
+#Creamos funcion intencisidad
+lambda.t<- function(t){abs(sin(t))}
+
+
+# Creamos el proceso Poisson N-Hom
+ppoisson.nh<- function(lambda.t,n){
+  lambda<- 1 #Aqui mayoritamos la funcion lambda.t
+  T.exp<- rexp(n, lambda) #Generamos va's exponenciales
+  tiempos<- cumsum(T.exp) #Suma Acumulativa de tiempos
+  u<- runif(n)  #Generamos va's uniformes
+  
+  #Verificamos los tiempos que complen la condicion de aceptacion
+  tiempos.a<- tiempos[u <= lambda.t(tiempos)/lambda]
+  N.t<- 1:length(tiempos.a) #Contador
+  
+  #Graficamos
+  plot(tiempos.a, N.t, type = 's',col='tomato',lwd=2, xlab = 't', ylab = 'N(t)', 
+       main= "Sim. Proceso Poisson No Homogeneo")
+  return(list(t=tiempos.a, contador= N.t))
+  
+}
+
+Nt<- ppoisson.nh(lambda.t,100)
+
+```
+
+
+# Pregunta 4
+Datos: 
+
+\begin{itemize}
+
+\item $N_{1}(t) \sim ~Poiss(3/día)$
+\item $N_{2}(t) \sim ~Poiss(4/día)$
+\item Máquina shock 1 falle: $p_{1}=0.011$
+\item Máquina shock 2 falle: $p_{2}=0.005$
+\item $N(t) \equiv \#$ de reemplazos de la máquina sobre el intervalo $(0,t]$
+\end{itemize}
+
+## (a)
+
+Sabemos que  la distribución Poisson tiene la propiedad aditiva sobre su tasa. Entonces: 
+
+
+
+$N_{1}(t)+N_{2}(t) \sim ~Poiss(3+4=7/día)=Poiss\Bigg(\frac{7}{3}~ por~turno~de~8~hrs.\Bigg)$
+
+
+
+Por lo tanto, 
+
+$\mathbb{E}[N_{1}(t)+N_{2}(t)]=\frac{7}{3}~;~Var[N_{1}(t)+N_{2}(t)]=\frac{7}{3}~ hrs.$
+
+## (b)
+Sabemos que el promedio de shocks en un día es $3+4=7$, por lo que el promedio de shocks en una hora es $7/24$. Definimos $X \sim ~Poiss(\frac{7}{24})$. Así, 
+
+\begin{equation*}
+    \mathbb{P}(X=2)= \frac{e^{-.292}* .292^{2}}{2!}\approx 0.03183624
+  \end{equation*}
+  
+  
+## (c)
+\begin{center}
+\includegraphics{Ej4c_Tarea4SIM.jpeg}
+\end{center}
+
+
+# Pregunta 5
+
+Sea $T\equiv$número de eventos en un periodo de tiempo.
+
+\begin{equation*}
+    \mathbb{P}(T \geq 2)=0.28 \iff \mathbb{P}(T < 2)=\mathbb{P}(T = 0)+\mathbb{P}(T =1)=0.72
+  \end{equation*}
+
+Así, 
+
+\begin{equation*}
+    \frac{e^{-\lambda}\lambda^{0}}{0!}+\frac{e^{-\lambda}\lambda^{1}}{1!}=e^{-\lambda}+\lambda e^{-\lambda}=(1+ \lambda)e^{-\lambda}=0.72
+  \end{equation*}
+Resolviendo la eqcuación se tiene que $\lambda=1.04285$ ya que por definición $\lambda>0$.
+
+
+# Pregunta 6
+
+Primero para cada instante $t$ tenemos que $X(t)$ es el número de clientes que ya fueron atendidos y $Y(t)$ el número de clientes que se estan atendiendo en el momento $t$.
+Queremos calcular la esperanza y varizna de $X(t)$ para poder determinar su distrubución. Por lo que tenemos que:
+\[ E(x(t))= 5 \int_{0}^{t} e^{(-x/40)} \,dx\ = 5*40(1-e^{(-t/40)})
+\]
+Al tomar $t = 120$ tenemos:
+\[40(1-e^{(-t/40)}) = 5*38 = 190
+\]
+Y por otro lado tenemos
+\[V(x(t)) = 190
+\]
+Por lo tanto tenemos que $X \sim Poiss(190)$
+
+```{r, results=FALSE, warning=FALSE}
+
+n <- 190
+lambda = 5
+TA <- rexp(n,rate=1/lambda)
+tau <- cumsum(TA) #tiempos en donde ocurren los eventos 
+Nt <- 1:length(tau) 
+plot(c(0,tau), c(0,Nt), type="S",main="Proceso Poisson", 
+     xlab = expression(tau[n]), ylab=expression(N[t])) 
+
+```
+
+
+# Pregunta 7 
+
+
+## (a)
+
+\begin{center}
+\includegraphics{Ej1a_T4SIM.png}
+\end{center}
+
+
+## (b) y (c)
+
+```{r,warning=FALSE, results=TRUE}
+options(width = 150, digits = 3)
+BGeo <- function(n, TT, a, b, S0 = 100){
+  #Función para generar un proceso Browniano Geométrico
+  #n es el número de puntos de partición del intervalo [0,TT]
+  #a es el drift y b la volatilidad
+  dt <- TT/n #incremento de los intervalos para cubrir [0,TT]
+  S <- S0 #valor inicial
+  for(i in 2:(n+1)){
+    S <- append(S, S[i-1]*exp((a-b^2/2)*dt + b*sqrt(dt)*rnorm(1)))
+  }
+  return(S)
+}
+suma=0
+for (i in 1:10){
+par(new=TRUE)
+bg<-BGeo(30, 1, -5/24, 0.5, 1)
+plot(bg, type = "l",col= i, ylim = c(0,3),
+     xlab = "tiempo", ylab = expression(S[t]))
+suma=suma+bg[30]
+}
+promedio<-suma/i
+# Se puede concluir que St tiene una distribución lognormal para t grande y fija
+```
+
+
+## (d) y (e)
+```{r, results=TRUE, warning=FALSE}
+options(width = 150, digits = 3)
+BGeo <- function(n, TT, a, b, S0 = 100){
+  #Función para generar un proceso Browniano Geométrico
+  #n es el número de puntos de partición del intervalo [0,TT]
+  #a es el drift y b la volatilidad
+  dt <- TT/n #incremento de los intervalos para cubrir [0,TT]
+  S <- S0 #valor inicial
+  for(i in 2:(n+1)){
+    S <- append(S, S[i-1]*exp((a-b^2/2)*dt + b*sqrt(dt)*rnorm(1)))
+  }
+  return(S)
+}
+suma=0
+for (i in 1:100){
+  par(new=TRUE)
+  bg<-BGeo(30, 1, -5/24, 0.5, 1)
+  #plot(bg, type = "l",col= i, ylim = c(0,3),
+      # xlab = "tiempo", ylab = expression(S[t]))
+  suma=suma+bg[30]
+}
+promedio100<-suma/i
+suma1=0
+for (i in 1:1000){
+  par(new=TRUE)
+  bg1<-BGeo(30, 1, -5/24, 0.5, 1)
+  #plot(bg, type = "l",col= i, ylim = c(0,3),
+  # xlab = "tiempo", ylab = expression(S[t]))
+  suma1=suma1+bg1[30]
+}
+promedio1000<-suma1/i
+#Podemos decir con claridad que cuando n tiende a infinito el promedio tiende
+#a la media de una distribución lognormal
+```
+
+# Pregunta 8
+
+## (a)
+```{r, results=FALSE}
+WienerGeo <- function(n,TT,a,b,S0){
+  dt <- TT / n
+  S <- S0
+  for(i in 2:(n+1)){
+    S <- append(S, S[i-1]*exp((a-b^2/2)*dt + b*sqrt(dt)*rnorm(1))) }
+  return(S)
+}
+WienerGeo(5000,5000/12, .10, .30 ,1) #Muestra
+```
+
+
+## (b)
+
+```{r, results=FALSE}
+WienerGeo_mod <- function(n,TT,a,b,S0){
+  dt <- TT / n
+  S <- S0
+  for(i in 2:(n+1)){
+    k <- (S[i-1]*exp((a-b^2/2)*dt + b*sqrt(dt)*rnorm(1)))
+    S <- append(S, k)
+  }
+  for(i in 2:(n+1)){
+    t <- (i-1)*dt
+    S[i] <- S[i]/t
+  }
+  
+  return(S)
+}
+
+X <- WienerGeo_mod(3000,3000/12, .10, .30 ,1) 
+
+plot(X, type = "l", ylim = c(0,5000), xlab = "tiempo", ylab = expression(S[t]))
+```
+
+
+## (c)
+
+```{r, results=FALSE}
+WienerGeo_mod1 <- function(n,TT,a,b,S0){
+  dt <- TT / n
+  S <- S0
+  for(i in 2:(n+1)){
+    k <- (S[i-1]*exp((a-b^2/2)*dt + b*sqrt(dt)*rnorm(1)))
+    S <- append(S, k)
+  }
+  q <- max(S)
+  for(i in 2:(n+1)){
+    t <- (i-1)*dt
+    S[i] <- ((S[i] - q*t)^2)/t
+  }
+  
+  return(S)
+}
+
+X <- WienerGeo_mod(3000,3000/12, .10, .30 ,1) 
+
+plot(X, type = "l", ylim = c(0,5000), xlab = "tiempo", ylab = expression(S[t]))
+```
+
+
+
+
+

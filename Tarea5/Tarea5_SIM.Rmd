@@ -1,0 +1,715 @@
+---
+title: 'Simulación: Tarea 5'
+author:
+- Luis Gerardo Martínez Valdés
+- Emiliano Pizaña Vega
+- Fausto Membrillo Fuentes
+date: "Otoño 2021"
+output:
+  pdf_document: default
+  word_document: default
+number_sections: yes
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+\vspace{3cm.}
+
+```{=tex}
+\begin{center}
+\includegraphics{itamlogo.png}
+\end{center}
+```
+\newpage
+
+```{r,echo= FALSE,results=FALSE, message =FALSE, warning= FALSE}
+library(FactoMineR)
+library(factoextra)
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(ggthemes)
+library(stringr)
+library(tidyr)
+library(tidyverse)
+library(viridis)
+library(rmutil)
+library(STAR)
+library(statmod)
+library(invgamma)
+```
+
+# Pregunta 1
+
+a.  Podemos tomars una permutación inicial $\pi_{0}=(\{1,2,3,4,5\})$ y
+    aplicamos el siguiente algoritmo $\forall ~j=1,..,100$:
+
+-   Seleccionamos una
+    $i\sim (\frac{1}{15},\frac{2}{15},\frac{3}{15},\frac{4}{15},\frac{5}{15})$
+-   De ahí, calculamos la posición del j-ésimo elemento $L_{j}$
+-   Generamos una nueva permutación $\pi(i, Y_{1}, Y_{2},Y_{3}, Y_{4})$
+-   Incrementamos el contador, i.e $j\equiv j+1$ Implementación del
+    algoritmo:
+
+```{r}
+pi0<- c(1,2,3,4,5) #Permutacion inicial
+N <- 100
+L <- C <- NULL
+#Vamos llenando una matrix con las permutaciones
+Permu <- matrix(rep(0,500),nrow=N,5) 
+for(j in 1:N){
+i <- sample(1:5,size=1,replace = F,prob = (1:5)/15) #seleccionamos i
+C[j] <- i #contador 
+L[j] <- match(i,pi0) #caclulamos posicion inicial
+Permu[j,] <- c(i,pi0[-match(i,pi0)])
+pi0 <- Permu[j,]
+}
+Lgorrito <- mean(L)
+Lgorrito
+```
+
+b.  Sabemos que $E[N_{i}]=Np_{i}$. Si $N=100$, entonces tenemos que el
+    vector de valor esperados está dado por
+    $(E[N_{1}],..,E[N_{5}])=100(\frac{1}{15},\frac{2}{15},\frac{3}{15},\frac{4}{15},\frac{5}{15})$
+
+c.  Exploramos $E[\frac{Y}{N}]= E[~\sum_{1}^{5}iN_{i}/N~]$, por el
+    inciso anterior se tiene que $N= E\Big[\frac{N_{i}}{p_{i}}\Big]$,
+    sustituyendo se tiene que $E[\frac{Y}{N}]= ~\sum_{1}^{5}ip_{i}$. Por
+    lo tanto, $\frac{Y}{N}$ es el estimador del promedio del número
+    seleccionado. Como Y es la suma promedio de los números
+    seleccionados, se entiende que mientras mayor sea $p_{i}$ para un
+    $i$ grande, será más probable que este número esté en la primera
+    posición, esto implica que nuestra L se hará más pequeña. Así,
+    podemos inferir que la relación entre Y y L es negativa.
+
+d.  Del resultado anterior, y una vez hechas las simulaciones, generamos
+    parejas $(Y,L)$ y verificamos la correlación entre Y y L.
+
+```{r}
+sims <- function(pi0=1:5,n=100){
+L <- C <- NULL
+Permu <- matrix(rep(0,500),nrow=100,5)
+for(j in 1:n){
+i <- sample(1:5,size=1,replace = F,prob = (1:5)/15)
+C[j] <- i
+L[j] <- match(i,pi0)
+Permu[j,] <- c(i,pi0[-match(i,pi0)])
+pi0 <- Permu[j,]
+}
+return(c(LT=sum(L),Y=sum(as.vector(table(C))*(1:5))))
+}
+datos <- NULL
+for(i in 1:200) datos <- rbind(datos,sims())
+head(datos) #Verificamos nuestro Data Frame
+
+#Graficamos 
+plot(datos, pch=16, col= 'dodgerblue')
+
+```
+
+Podemos, incluso correr una regresión para corroborar nuestra intuición.
+Tomando a Y como variable de control, podemos reducir la varianza. dado
+que $E[Y]=\frac{100}{15} \sum_{i=5}^{5}i^{2}=366.666667$. Entonces,
+tendremos un nuevo estimador dado por
+$\hat{\theta}= L+ \hat{\beta}(Y-366.666667)$
+
+```{r,warning=FALSE}
+datos<- as.data.frame(datos)
+modelo<- lm(LT~Y, data=datos)
+summary(modelo)
+
+betagorro<- coefficients(modelo)[2]
+# Vamos a reducir la varianza
+datos<- NULL;M<- 1000
+for(i in 1:M) datos<- rbind(datos,sims())
+datos<- as.data.frame(datos)
+theta<- mean(datos$LT)
+
+theta.gorro<- mean(datos$LT - betagorro*(datos$Y- 366.666667))
+paste0('Theta: ', theta,', ', 'Theta Gorro: ',theta.gorro) 
+
+#Intervalos de Confianza para theta
+LB.theta<- theta-qnorm(.975)*sd(datos$LT)/sqrt(M)
+UB.theta<- theta+qnorm(.975)*sd(datos$LT)/sqrt(M)
+paste0('IC al 97.5% para theta: [', LB.theta, ', ', UB.theta, ' ]')
+
+
+#Intervalos de Confianza para theta.gorro
+LB.theta.gorro<- theta.gorro-qnorm(.975)*sd(datos$LT)/sqrt(M)
+UB.theta.gorro<- theta.gorro+qnorm(.975)*sd(datos$LT)/sqrt(M)
+paste0('IC al 97.5% para theta gorro: [', LB.theta.gorro, ', ', UB.theta.gorro, 
+       ' ]')
+
+```
+
+# Pregunta 2
+
+Sea $\theta= \mathbb{P}(X+Y>4)= \mathbb{E}[\mathbb{I}(X+Y>4)]$ como una
+esperanza. Por medio del teorema de Torre, tenemos que:
+
+\begin{equation*}
+  \mathbb{E}[\mathbb{I}(X+Y>4)]=E[E[I(X+Y>4)|Y]]= \int_{0}^{\infty} P(X+y>4|y) f_{y}(y)dy 
+\end{equation*} \begin{equation*}
+=\int_{0}^{4} P(X>4-y) f_{y}(y)dy= E_{Y}[I(0<y<4)](1-F_{X}(1-y))=E_{Y}[I(0<y<4)e^{-(4-y)}]
+\end{equation*} Entonces,tomamos
+$\hat{\theta}= \frac{\sum_{i=1}^{n} I(0<y_{i}<4)e^{-(4-y_{i})}}{n}$ como
+estimador para $\theta$, tomando samples de la exponencial con media 2.
+Si condicionamos sobre la otra variable (i.e. $X$) el problema es
+perfectamente simétrico y, por lo tanto, la que conviene es la que tenga
+menor varianza condicional.
+
+# Pregunta 3
+
+vamos a proponer dos métodos: 1. Calculamos $\theta$ como el promedio de
+dos variables antitéticas:
+
+```{=tex}
+\begin{equation*}
+  \theta= \frac{e^{u^{2}}(1+e^{1-2u})}{2}=\frac{e^{u^{2}}+e^{(1-u)^{2}}}{2}
+\end{equation*}
+```
+Sabemos que la función $h(u)=e^{u^{2}}$ es monótona entonces
+$Cov(h(u),h(1-u))<0$.
+
+Por otro lado, 2. Usamos dos números diferentes $u_{1},u_{2}$
+independientes para obtener el mismo promedio, se sigue que
+$Cov(u_{1},u_{2})=0$. Por lo tanto, no vamos a alcanzar la reducción de
+varianza.
+
+```{r}
+#Primer Metodo
+metodo1<- function(n){
+  u<- runif(n)
+  theta1<- (exp(u^2)+exp((1-u)^2))/2 #promedio de variables antiteticas
+  theta.gorro1<- mean(theta1)
+  return(list(theta.gorro1=theta.gorro1,desvest.theta1=sd(theta1)))
+}
+#Segundo Metodo
+metodo2<- function(n){
+  u1<- runif(n); u2<- runif(n)
+  theta2<- (exp(u1^2)+exp(u2^2))/2
+  theta.gorro2<- mean(theta2)
+  return(list(theta.gorro2=theta.gorro2,desvest.theta2=sd(theta2)))
+}
+
+#Resultados
+#n=10000
+metodo1(10000)
+metodo2(10000)
+
+```
+
+# Pregunta 4
+
+Podemos resolver esta integral usando variables antitéticas de la
+siguiente forma: Para $i=1, ... , n$
+
+1.  Generamos dos variables $u_{ij}\sim ~U(0,1)$ para $j=1,2$.
+2.  Calculamos $\theta_{1i}=h(u_{i1},u_{i2})$ y
+    $\theta_{2i}=h(1-u_{i1},1-u_{i2})$ para una función
+    $h(x_{1},x_{2})=e^{(x_{1}+x_{2})^2}$.
+3.  Tomamos el promedio $\theta_{i}=\frac{\theta_{1i}+\theta_{2i}}{2}$
+4.  Obtenemos el estimador de la integral con
+    $\hat{\theta}=\frac{1}{n}\sum_{1}^{n}\theta_{i}$
+
+Como $h(x_{1},x_{2})$ es monótona en $x_{1},x_{2}$ entonces
+$Cov(h(u_{i1},u_{i2}),h(1-u_{i1},1-u_{i2}))\leq 0$. Numéricamente:
+
+```{r}
+ejercicio4<- function(n){
+  u1<- runif(n); u2<- runif(n)
+  h1<- exp((u1+u2)^2)
+  h2<- exp((2-u1-u2)^2) # (1-u1+1-u2=2-u1-u2)
+  theta<- (h1+h2)/2
+  thetagorrito<- mean(theta)
+  return(list(theta.gorrito=thetagorrito, desvesttheta=sd(theta)))
+}
+ejercicio4(1000)  
+
+```
+
+# Pregunta 5
+
+a.  
+
+```{r}
+#Tomamos un simple ejemplo para verificar correlacion negativa
+a<- -.5
+X<- rnorm(1000, mean=-2,sd=2)
+cor(ifelse(X<a,1,0),X)
+```
+
+b.  
+
+```{r}
+# Vamos a tomar el mismo valor de a y proponemos una constante c=100
+c<- 100
+a<- .5
+
+#base
+x<- runif(c)
+i<- ifelse(x<a,1,0)
+#Coeficientes del modelo de regresion lineal
+betas<- - lm(i~x)$coeff[2]
+
+#Comenzamos a reducir varianza
+x<- runif(1000)
+i<- ifelse(x<a,1,0)
+mean(i)
+Yc<- i+betas*(x-mean(x))
+paste0('Media I: ', round(mean(i),8), ' DesvEst I: ', sd(i) )
+list(Media.Yc=round(mean(Yc),8), DesvEstYc=sd(Yc))
+
+#Porcentaje de reduccion de varianza
+c*(sd(i)-sd(Yc))/sd(i)
+
+```
+
+c.  Cuando $X\sim~Exp(1)$,
+
+```{r}
+# Vamos a tomar el mismo valor de a y proponemos una constante c=100
+c<- 100
+a<- .5
+
+#base
+x<- rexp(c,1)
+i<- ifelse(x<a,1,0)
+#Coeficientes del modelo de regresion lineal
+betas<- - lm(i~x)$coeff[2]
+
+#Reducimos varianza
+x <- rexp(1000,1)
+i <- ifelse(x<a,1,0)
+Yc <- i + betas*(x-1)
+
+paste0('Media I: ', round(mean(i),8), ' DesvEst I: ', sd(i) )
+list(Media.Yc=round(mean(Yc),8), DesvEstYc=sd(Yc))
+
+#Porcentaje de reduccion de varianza
+c*(sd(i)-sd(Yc))/sd(i)
+
+```
+
+Por lo tanto, también alcanzamos la reducción de varianza.
+
+# Pregunta 6
+
+a.  Notamos que podmos tomar $p= P(X>20)=1-(P \leq 20)$, así:
+
+```{=tex}
+$$
+\begin{equation*}
+P(X\leq 20)= \int_{0}^{1}P(X \leq 20|u)du=\int_{0}^{1}\sum_{i=0}^{20}e^{-\frac{15}{0.5+u}}\frac{(15/(0.5+u))^{i}}{i!}du= \sum_{i=0}^{20}\frac{1}{i!}\int_{0}^{1}e^{-\frac{15}{0.5+u}}(15/(0.5+u))^{i}du
+\end{equation*}
+```
+Por lo que podemos estimar cada integral por medio de
+$g(i)=\int_{0}^{1}e^{-\frac{15}{0.5+u}}(15/(0.5+u))^{i}du~~\forall~~i=0,..,20$.
+
+```{r}
+g<- NULL # Inicializamos el vector de integrales
+for(i in 0:20){
+  u<- runif(10000)
+  x<- exp(-15/(0.5+u))*(15/(0.5+u))^i
+  #LLenado
+  g[i+1]<- mean(x)
+}
+
+(p<- 1 - sum(g*1/factorial(0:20)))
+
+```
+
+b.  Creamos la variable de control con la dependencia entre $u$ y
+    $X \mid u$ tal que
+
+```{r}
+k <- 1000
+n <- 100000
+# Base
+gu <- NULL
+u <- runif(k)
+for (i in 1:length(u)) {
+  gu[i] <- rpois(1, 15 / (0.5 + u[i]))
+}
+betas <- -lm(gu ~ u)$coeff[2]
+# Simulamos
+u <- runif(n)
+x <- NULL
+for (i in 1:length(u)) {
+  x[i] <- rpois(1, 15 / (0.5 + u[i]))
+}
+yc <- x + betas * (u - 0.5)
+(p <- mean(yc > 20))
+var(gu)
+var(yc)
+
+```
+
+c.  Finalmente, con variables antitéticas tenemos que:
+
+```{r}
+g <- NULL
+for (i in 0:20) {
+  u <- runif(5000)
+  h1 <- exp(-15 / (0.5 + u)) * (15 / (0.5 + u)) ^ i
+  h2 <- exp(-15 / (0.5 + (1 - u))) * (15 / (0.5 + (1 - u))) ^ i
+  g[i + 1] <- (mean(h1) + mean(h2)) / 2
+}
+(p <- 1 - sum(g / factorial(0:20)))
+
+```
+
+# Pregunta 7
+
+a.  Por simulación directa(MC crud
+
+```{r}
+a <- c(1,2,3,1,2)
+F <- function(x)min(x[1]+x[4],x[1]+x[3]+x[5],x[2]+x[3]+x[4],x[2]+x[5])
+h <- function(x)F(a*x)
+G <- NULL
+n <- 10000
+for(i in 1:n) G[i]<-h(runif(5))
+list(MediaMC=mean(G),DesvEstMC=sd(G)/sqrt(n))
+MediaMC=mean(G);DesvEstMC=sd(G)/sqrt(n)
+```
+
+b.  Para variables antitéticas:
+
+```{r}
+n<-10000
+G1 <- G2 <- NULL
+for(i in 1:n/2){
+u <- runif(5)
+G1[i] <- h(u)
+G2[i] <- h(1-u)
+}
+G <- (G1+G2)/2
+list(MediaVA=mean(G),DesvEstVA= sd(G)/sqrt(n))
+MediaVA=mean(G);DesvEstVA= sd(G)/sqrt(n)
+```
+
+c.  En el caso de variables de control, tomamos
+    $Y = min\{X_{1} + X_{4}, X_{2}+X_{5}\}$. Podemos ver que para los
+    parámetros dados, la ruta más corta tendrá longitud Y. Asi,
+    $E(Y) = \frac{15}{16} = 0.9375$:
+
+```{r}
+n<-10000
+Fcontrol <- function(x)min(x[1]+x[4],x[2]+x[5])
+hcontrol <- function(x)Fcontrol(a*x)
+u <- matrix(runif(n*5),nrow=n,ncol=5)
+Y <- apply(u,1,hcontrol)
+Ycontrol <- apply(u,1,hcontrol)
+corr <- cor(Y,Ycontrol)
+G <- mean(Y-corr*(Yc-15/16))
+list(MediaVC= G, DesvEstVC=sd(Y-corr*(Yc-15/16))/sqrt(n))
+MediaVC= G; DesvEstVC=sd(Y-corr*(Yc-15/16))/sqrt(n)
+```
+
+d.  Finalmente, sean
+    $Z_{1}=min\{X_{4}, X_{3}+X_{5}\}, Z_{2}=min\{X_{5},X_{3},X_{4}\}$
+    entonces tenemos
+    $Y_{1}=X_{1}+Z_{1},Y_{2}=X_{2}+Z_{2} \implies Y=H(X)=min\{Y_{1},Y_{2}\}$.
+
+```{r}
+#Funciones
+z1control <- function(x) min(x[4], x[3] + x[5])
+z2control <- function(x) min(x[5], x[3] + x[4])
+Z1 <- function(x) z1control(a*x)
+Z2 <- function(x) z2control(a*x)
+Y1 <- function(x) x[1] + Z1 
+Y2 <- function(x) x[2] + Z2
+#Condicionamos
+h<- function(x) min(Y1,Y2)
+#Simulacion
+Yc <- NULL
+for (i in 1:n){
+  u <- runif(5)
+  z1 <- Z1(u)
+  z2 <- Z2(u)
+  
+  y1<- runif(1,z1, z1 +1)
+  y2 <- runif(1,z2, z2 +2)
+  
+  #definimos nuestra funcion h(x) que resulta del condicionamiento 
+  Yc[i] <- min(y1,y2)
+  
+}
+#obtenemos estimación por montecarlo crudo después del condicionamiento 
+media.condicionamiento <- mean(Yc)
+sd.condicionamiento <- sd(Yc)/sqrt(n)
+list(MediaCond=media.condicionamiento,DesvEstCond=sd.condicionamiento)
+MediaCond=media.condicionamiento;DesvEstCond=sd.condicionamiento
+
+```
+
+Calculamos la reducción de varianzas:
+
+```{r}
+(red.v1<- 100*(DesvEstMC-DesvEstVA)/DesvEstMC)
+(red.v2<- 100*(DesvEstVC-DesvEstMC)/DesvEstMC)
+(red.v3 <- 100*(DesvEstMC-DesvEstCond)/DesvEstMC)
+
+
+```
+
+# Pregunta 8
+
+Tenemos que $S_{n}=\sum_{i=1}^{n}X_{i}$ donde
+$p_{i}P(X_{i}=j)=\frac{1}{6}~\forall~j=1,..,6$. Es fácil ver que
+$E(X_{i})=\sum_{i=1}^{n}p_{i}X_{i}=3.5, V(X_{i})=\frac{35}{12}$,
+entonces $E(S_{n})=3.5n=350, V(S_{n})=\frac{35n}{12}=292~con~n=100$. Por
+desigualdad de Chebyshev, tenemos que:
+
+```{=tex}
+\begin{equation*}
+P(|S_{100}-350| \geq \epsilon) \leq \frac{292}{\epsilon^2}\implies P(S_{100}>380)=P(S_{100}-350 \geq 30)=P(|S_{100}-350| \geq 30) \leq \frac{292}{30^2}\approx 0.3244444
+\end{equation*}
+```
+# Pregunta 9
+
+a.  Buscamos $\pi(\theta|y)$ y conocemos la verosimilitud
+    $\pi(y|\theta)$ y la distribucion inicial $\pi(\theta)$. Se sigue
+    que:
+
+```{=tex}
+\begin{equation*}
+\pi(\theta|y)=\frac{\pi(y|\theta)\pi(\theta)}{p(y)}~ \alpha~ \pi(y|\theta)\pi(\theta)= \theta^{-1} e^{-y\theta}-(\alpha+1)e^{-\beta \theta}=\theta^{-(\alpha+2)}e^{\frac{-(y+\beta)}{\theta}}
+\end{equation*}
+```
+Por lo tanto la distribución posterior es
+$\theta|y \sim IG(\alpha+1,\beta+y)$
+
+b.  Por el resultado del incisio anterior tenemos que
+    $E[\theta|y]=\frac{1}{\alpha(\beta+y)},~ V[\theta|y]=\frac{1}{\alpha^{2}(\beta+y)^{2}(\alpha-1))}$
+
+c.  Sea $h(\theta)=\theta^{s}e^{\frac{t}{\theta}}$ el kernel de la
+    distribución posterior de $\theta$, con
+    $s=-(\alpha+2),~ t=-(\beta+y)$. Como queremos la moda, vamos a
+    maximizar la función $h$. Así,
+
+```{=tex}
+\begin{equation*}
+[\theta]: \theta s-2e^{\frac{r}{\theta}}(s\theta-t)=0 \implies \theta^{*}=\frac{r}{s}=\frac{\beta+y}{\alpha+2}
+\end{equation*}
+```
+d.  Lo que nos piden es lo mismo que encontrar los cuantiles
+    $q_{0,25}, q_{.975}$, que corresponden a las dos ecuaciones. Esto
+    es,
+
+```{=tex}
+\begin{equation*}
+F_{\theta|y}(q_{.975})=.975 ~y~ F_{\theta|y}(q_{.025})=.025
+\end{equation*}
+```
+```{r}
+#Usamos Integracion MC para resolver este problema.
+#Queremos usar valores de alpha=1, beta=4-> parametros(2,5)
+n<- 10000
+shape<- 2; scale<- 5
+#Sabemos que Gamma(n)=(n-1)! para n en naturales
+#Tenemos Gamma(scale)=Gamma(2)=1
+f<- function(x) ((scale^shape)*x^(-shape-1)*exp(-scale/x)/1) #pdf original
+#Tenemos que trasladarla a (.975,10000) liite superior muy grande 
+a<- .975; b<- 10000
+c<- min(f(a:b))
+d<- max(f(a:b))
+x<- runif(n)
+
+g<- function(y) (f(a+(b-a)*y)-c)/(d-c)
+(I.025<- (b-a) * (d-c) * sum(g(x))/n +c*(b-a))
+
+qinvgamma(0.025,2,5,1/5,T)
+
+a<- 0; b<- 1
+c<- min(f(a:b))
+d<- max(f(a:b))
+x<- runif(n)
+
+(I.975<-  sum(f(x))/n )
+
+pinvgamma(0.975,2,5,1/5,T)
+```
+
+# Pregunta 10
+
+Podemos seguir el siguiente pseudo-algoritmo:
+
+-   Idetificar qué parámetros queremos estimar.
+-   Encontrar alguna distribución inicial para estos.
+-   Obtener la distribución posterior.
+-   Identificar las características de la última.
+
+```{r, echo=FALSE,warning=F}
+sample <- c(1.2, 2.4, 1.3, 1.3, 0, 1, 1.8, 0.8, 4.6, 1.4)
+ybarra <- mean(sample)
+s <- sd(sample)
+n <- length(sample)
+u.1 <- rchisq(10000, (n - 1))
+u.2 <- rnorm(10000)
+sigma <- sqrt((n - 1) * (s ^ 2) / u.1)
+mu <- ybarra - ((u.2 * sigma) / sqrt(n))
+
+dist.posterior <- function(f, a, b, c, d, rate.1, rate.2) {
+    aa <- seq(a, b, rate.1)
+    bb <- seq(c, d, rate.2)
+    post <- outer(aa, bb, f)
+    rownames(post) = aa
+    colnames(post) = bb
+    post <- as.data.frame(post) %>%
+        rownames_to_column(var = 'row') %>%
+        gather(col, value,-row) %>%
+        mutate(row = as.numeric(row),
+               col = as.numeric(col))
+    post <- post[!is.infinite(rowSums(post)), ]
+    post <- na.omit(post)
+    p <- ggplot(post, aes(
+        x = row,
+        y = col,
+        z = value,
+        fill = value
+    )) +
+        geom_tile() +
+        geom_contour(color = 'black', size = 1) +
+        scale_fill_viridis(option = 'mako',
+                           direction = -1) +
+        theme_minimal() +
+        labs(x = expression(Theta),
+             y = expression(sigma),
+             fill = NULL)
+    p.mu <- ggplot(post, aes(x = row,
+                             y = value)) +
+        geom_point(size = 0.1) +
+        theme_minimal() +
+        labs(x = expression(Theta),
+             y = NULL) +
+        theme(axis.text.y = element_blank())
+    p.sigma <- ggplot(post, aes(x = col,
+                                y = value)) +
+        geom_point(size = 0.1) +
+        theme_minimal() +
+        labs(x = expression(sigma),
+             y = NULL) +
+        theme(axis.text.y = element_blank())
+    return(list(p, p.mu, p.sigma))
+}
+```
+
+1.  Distribución Normal
+
+En este caso, se tiene una sample aleatoria de tamaño $n$ de una
+distribución $N(\mu,\sigma^2)$ con parámetros desconocidos. Sabemos que
+$\bar{y},s^2$ son estimadores suficientes para $\mu$ y $\sigma^2$
+respectivamente. Y sabemos que
+$\displaystyle \bar{y} \sim \mathcal{N}\left(\mu, \sigma^2/n\right)$ y
+$\displaystyle (n - 1) \frac{s^2_y}{\sigma^2} \sim \chi^2_{(n-1)}$. Así,
+la función de verosimilitud está dada por:
+
+```{=tex}
+\begin{equation*}
+l(\theta, \sigma | y) \propto p(\bar{y}|\theta,\sigma^{2})p(s^{2}|\sigma^{2})\propto \sigma^{-n}e^{-\frac{(n-1)s^{2}+n(\theta-\bar{y})^{2}}{2\sigma^{2}}}\implies \pi(\theta,\sigma|y)\propto\pi(\theta,\sigma)p(\bar{y}|\theta,\sigma^{2})p(s^{2}|\sigma^{2})
+\end{equation*}
+```
+Suponiendo que $\theta,\sigma$ independientes, se tiene que para cada
+parámetro
+$\pi(\theta,\sigma)=\pi(\theta)\pi(\sigma)\propto \frac{c}{\sigma}$.
+Así, obtenemos la distribución posterior:
+
+```{=tex}
+\begin{equation*}
+ \pi(\theta,\sigma|y)\propto \sigma^{-(n-1)}e^{-\frac{(n-1)s^{2}+n(\theta-\bar{y})^{2}}{2\sigma^{2}}}
+\end{equation*}
+```
+De esta forma, podemos definir
+
+```{r}
+Normal.Bayes <- function(theta10, sigma) {
+  sigma ^ (-n - 1) *
+  exp(-1 / (2 * sigma ^ 2) *(((n - 1) * (s ^ 2)) +
+     (n * ((theta10-ybarra) ^ 2))))
+}
+```
+
+```{r, echo=FALSE, out.width='100%',warning=FALSE}
+plot.Normal <- dist.posterior(Normal.Bayes, 0, 4, 0, 4, 0.005, 0.005)
+plot.Normal[[1]]
+plot.Normal[[2]]
+plot.Normal[[3]]
+```
+
+2.  Distribución t
+
+Similarmente podemos obtener:
+
+```{=tex}
+\begin{align*}
+\pi(\theta,\sigma|y)\propto\pi(\theta,\sigma)p(\bar{y}|\theta,\sigma)
+&\propto \frac{\sqrt{n}}{s_y\sigma} \left(1 + \frac{1}{t}\frac{(n - 1)s^2_y + n(\bar{y} - \theta)^2}{s^2_y}\right)^{-\frac{t+1}{2}}
+\end{align*}
+```
+para una constante $t$
+
+```{r}
+t1.bayes <- function(theta11, sigma1) {
+  (sqrt(n) / (sigma1 * s)) *
+    (1 + ((((n - 1) * (s ^ 2)) +
+      (n * ((ybarra - theta11) ^ 2
+      ))) /
+      (s ^ 2))) ^ (-1)
+}
+t3.bayes <- function(theta13, sigma3) {
+  (sqrt(n) / (sigma3 * s)) *
+    (1 + (((((n - 1) * (s ^ 2)
+    ) +
+      (
+        n * ((ybarra - theta13) ^ 2)
+      )) /
+      (s ^ 2)) / 3)) ^ (-2)
+}
+```
+
+-   Para $t_{(3)}$
+
+```{r, echo=FALSE, out.width='100%'}
+plot.t.3 <- dist.posterior(t3.bayes, -0.5, 3.45679, 0, 2, 0.009, 0.5)
+plot.t.3[[1]]
+plot.t.3[[2]]
+plot.t.3[[3]]
+```
+
+-   Para $t_{(1)}$
+
+```{r, echo=FALSE, out.width='100%'}
+plot.t1 <- dist.posterior(t1.bayes, -7, 4, 0, pi, 0.03, 0.09965273)
+plot.t1[[1]]
+plot.t1[[2]]
+plot.t1[[3]]
+```
+
+3.  Bernoulli
+
+Ahora, se tiene que:
+
+```{=tex}
+\begin{align*}
+\pi(\theta|y) &\propto l(y\mid\mu) =\prod_{i=1}^n \theta^{y_i} (1 - \theta)^{1 - y_i} =\theta^{\sum_{i=1}^n y_i} (1 - \theta)^{\sum_{i=1}^n (1 - y_i)} \propto \theta^{n\bar{y}} (1 - \mu)^{n(1-\bar{y})}
+\end{align*}
+```
+```{r, echo=T, out.width='100%', warning=F}
+#Definimos la distribucion posterior
+Ber.bayes <- function(theta.b) {
+  (theta.b ^ (n * ybarra)) * ((1 - theta.b) ^ (n * (1 - ybarra)))
+}
+
+#Graficamos
+x <- seq(-10, 10, 0.001)
+y <- Ber.bayes(x)
+df <- na.omit(data.frame(x, y)) #no nos importan los NA's que podamos arrojar
+ggplot(df, aes(x = x, y = y)) +
+  geom_point(size = 0.05) +
+  scale_y_log10() +
+  theme_minimal() +
+  labs(title='Distribución Posterior Bernoulli', x= 'x', y='y')
+```
